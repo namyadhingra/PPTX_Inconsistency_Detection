@@ -1,0 +1,6 @@
+python-pptx
+Pillow
+tqdm
+pytesseract
+dateparser
+google-generativeai
