@@ -15,7 +15,7 @@ import google.generativeai as genai
 from pathlib import Path
 
 GEMINI_MODEL = "gemini-2.5-flash"
-genai.configure(api_key=os.environ.get("AIzaSyBUN6KPuVClfCFYUi7INz35ZHw7D8fe19c"))  # Use your env variable for the API key
+genai.configure(api_key=os.environ.get("my_api_key"))
 model = genai.GenerativeModel(GEMINI_MODEL)
 
 # Section 2: Helper functions
@@ -299,7 +299,7 @@ def main():
         ]
     }
 
-    out_path = Path(pptx_path).resolve().parent / "inconsistencies.json"
+    out_path = Path(__file__).resolve().parent / "inconsistencies.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
