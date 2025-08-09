@@ -1,7 +1,0 @@
-Pip version used: pip-25.2
-
-
-Primary aim: If the PPTX is available, extract text via python-pptx.
-Fallback: If we point it to a folder of images (e.g. NoogatAssignment with Slide1.jpeg, etc.), it will perform OCR on those.
-
-The free tier for the Gemini 2.5 Flash API allows for a daily limit of 250 requests

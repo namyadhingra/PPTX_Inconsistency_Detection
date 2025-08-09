@@ -1,0 +1,11 @@
+# Environment and secrets
+.env
+*.key
+config.json
+secrets.txt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/

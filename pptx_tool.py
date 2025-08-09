@@ -1,3 +1,4 @@
+'''This is the Third version'''
 # Activate the virtual environment "venv" using "venv\Scripts\activate" and install the dependencies.
 # Dependencies in the file "dependencies.txt", run 
 # pip install -r dependencies.txt 
@@ -13,6 +14,11 @@ import pytesseract
 import dateparser
 import google.generativeai as genai
 from pathlib import Path
+from collections import defaultdict
+import difflib
+
+from dotenv import load_dotenv
+load_dotenv()  # This loads the .env file
 
 GEMINI_MODEL = "gemini-2.5-flash"
 genai.configure(api_key=os.environ.get("my_api_key"))
@@ -95,59 +101,302 @@ def normalize_slides(slide):
     return {"slide":slide["slide"] , "text": text.strip() , "numbers":numbers , "dates":list(set(dates))}
 
 
-# Section 3: Rule-Based Detections
+# Section 3: Enhanced Rule-Based Detections
 
+def extract_value_from_string(s):
+    """Extract numeric value from string, handling currency and units"""
+    # Remove common prefixes/suffixes and extract number
+    cleaned = re.sub(r'[₹$€,\s]', '', s)
+    match = re.search(r'(\d+(?:\.\d+)?)', cleaned)
+    return float(match.group(1)) if match else None
 
-# 1. Detecting numeric conflicts
-def detect_numeric_conflicts(slides):
-    """This function finds same metrics with different values across slides."""
-    metric_map = {} #Initializing an empty dictionary to store metrics and their values
-    # The metric_map will have the metric as the key, and the value will be a dictionary with the value as the key and a list of slides as the value
-    conflicts = [] #Initialized as an empty list
+def normalize_time_unit(value, text_context):
+    """Convert time values to consistent units (hours per month)"""
+    text_lower = text_context.lower()
+    
+    if 'per year' in text_lower or 'annually' in text_lower:
+        return value / 12  # converts yearly to monthly
+    elif 'minutes' in text_lower or 'mins' in text_lower:
+        return value / 60  # converts minutes to hours
+    elif 'per month' in text_lower or 'monthly' in text_lower:
+        return value  # already monthly hours
+    else:
+        return value  # Default
 
-    for s in slides:
-        pairs = re.findall(r"([A-Za-z %$₹€]{3,40})[:\-]?\s*([₹$€]?\s*\d[\d,\.]*%?)", s["text"])
-        # Explanation of "([A-Za-z %$₹€]{3,40})[:\-]?\s*([₹$€]?\s*\d[\d,\.]*%?)"
-        # ([A-Za-z %$₹€]{3,40}) matches a metric name that is 3 to 40 characters long, allowing letters, spaces, and currency symbols
-        # [:\-]? matches an optional colon or hyphen after the metric name
-        # \s* matches any whitespace after the colon or hyphen
-        # ([₹$€]?\s*\d[\d,\.]*%?) matches a value that may start with a currency symbol (₹, $, €), followed by optional whitespace, a digit, and then 
-        # any combination of digits, commas, periods, and an optional percentage sign
-        # re.findall() returns a list of tuples, where each tuple contains the metric and its
-        # corresponding value found in the text of the slide
+def detect_impact_value_conflicts(slides):
+    """Detect conflicts in key impact metrics like savings amounts"""
+    conflicts = []
+    impact_patterns = [
+        r'(\$\d+(?:\.\d+)?[MmKk]?)\s*(?:saved|impact|productivity)',
+        # Regex - matches a monetary value followed by keywords indicating impact
+        r'(?:saved|impact|productivity).*?(\$\d+(?:\.\d+)?[MmKk]?)',
+        # character to character description of above line:
+        # "\$\d+(?:\.\d+" means a monetary value with optional decimal and million/billion suffix
 
-        for metric, value in pairs:
-            k = metric.strip().lower() #metric.strip().lower() removes leading/trailing spaces and converts to lowercase
-            metric_map.setdefault(k, {}).setdefault(value, []).append(s["slide"]) 
-            #Adds the slide to the list of slides for the given metric and value
-
-    for metric, vals in metric_map.items():
-        if len(vals) > 1:
-            conflicts.append({"type": "numeric_conflict", "metric": metric, "values": vals})
+        r'(\$\d+(?:\.\d+)?[MmKk]?)\s*(?:in|of)?\s*(?:lost\s*)?productivity'
+        # Regex - matches a monetary value followed by optional keywords indicating lost productivity
+    ]
+    
+    found_values = defaultdict(list)
+    
+    for slide in slides:
+        text = slide["text"]
+        for pattern in impact_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                # Normalize the value (convert M to millions, etc.)
+                normalized_value = normalize_currency_value(match)
+                if normalized_value:
+                    found_values[normalized_value].append({
+                        'slide': slide['slide'],
+                        'raw_text': match,
+                        'context': text[:200]
+                    })
+    
+    # Check for conflicts
+    unique_values = list(found_values.keys())
+    if len(unique_values) > 1:
+        conflicts.append({
+            "type": "impact_value_conflict",
+            "severity": "high",
+            "description": f"Found conflicting impact values: {unique_values}",
+            "values": dict(found_values)
+        })
+    
     return conflicts
 
-# 2. Detecting percentage sum issues
+def normalize_currency_value(value_str):
+    """Convert currency strings to comparable numeric values"""
+    if not value_str:
+        return None
+    
+    # Extract number and multiplier
+    match = re.search(r'(\d+(?:\.\d+)?)([MmKk]?)', value_str.replace('$', ''))
+    if not match:
+        return None
+    
+    number = float(match.group(1))
+    multiplier = match.group(2).upper()
+    
+    if multiplier == 'M':
+        return number * 1000000
+    elif multiplier == 'K':
+        return number * 1000
+    else:
+        return number
+
+def detect_time_savings_conflicts(slides):
+    """Detect conflicts in time savings metrics with unit normalization"""
+    conflicts = []
+    time_patterns = [
+        r'(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?)\s*(?:saved\s*)?(?:per\s*slide)',
+        r'(?:saved\s*)?(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?)\s*per\s*slide',
+        r'(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?)\s*(?:per\s*consultant\s*monthly)',
+        r'(\d+(?:\.\d+)?)\s*(?:hours?)\s*(?:saved\s*)?(?:per\s*consultant\s*monthly)'
+    ]
+    
+    per_slide_savings = []
+    monthly_savings = []
+    
+    for slide in slides:
+        text = slide["text"]
+        
+        # Look for "per slide" savings
+        slide_matches = re.findall(r'(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?)\s*(?:saved\s*)?(?:per\s*slide)', text, re.IGNORECASE)
+        for value_str, unit in slide_matches:
+            value = float(value_str)
+            if 'min' in unit.lower():
+                value = value  # Keep in minutes for per-slide comparison
+            else:
+                value = value * 60  # Convert hours to minutes
+            
+            per_slide_savings.append({
+                'slide': slide['slide'],
+                'value': value,
+                'unit': 'minutes',
+                'raw_text': f"{value_str} {unit}",
+                'context': text
+            })
+        
+        # Look for monthly savings
+        monthly_matches = re.findall(r'(\d+(?:\.\d+)?)\s*hours?\s*(?:saved\s*)?(?:per\s*consultant\s*monthly)', text, re.IGNORECASE)
+        for value_str in monthly_matches:
+            monthly_savings.append({
+                'slide': slide['slide'],
+                'value': float(value_str),
+                'unit': 'hours_per_month',
+                'raw_text': f"{value_str} hours",
+                'context': text
+            })
+    
+    # Check for per-slide conflicts
+    if len(set(item['value'] for item in per_slide_savings)) > 1:
+        conflicts.append({
+            "type": "time_per_slide_conflict",
+            "severity": "medium",
+            "description": "Found conflicting time savings per slide values",
+            "values": per_slide_savings
+        })
+    
+    return conflicts
+
+def detect_sum_breakdown_conflicts(slides):
+    """Detect when breakdown components don't sum to the claimed total"""
+    conflicts = []
+    
+    for slide in slides:
+        text = slide["text"]
+        
+        # Look for "X Hours Saved Per Consultant Monthly" pattern
+        total_match = re.search(r'(\d+)\s*Hours?\s*Saved\s*Per\s*Consultant\s*Monthly', text, re.IGNORECASE)
+        if total_match:
+            claimed_total = int(total_match.group(1))
+            
+            # Look for individual time savings in the same slide
+            individual_savings = re.findall(r'(\d+)\s*hours?\s*per\s*consultant\s*monthly', text, re.IGNORECASE)
+            if len(individual_savings) > 1:  # More than just the total
+                # Remove the total from the list
+                individual_values = [int(x) for x in individual_savings if int(x) != claimed_total]
+                
+                if individual_values:
+                    actual_sum = sum(individual_values)
+                    if actual_sum != claimed_total:
+                        conflicts.append({
+                            "type": "sum_breakdown_mismatch",
+                            "severity": "high",
+                            "slide": slide['slide'],
+                            "claimed_total": claimed_total,
+                            "breakdown_sum": actual_sum,
+                            "breakdown_values": individual_values,
+                            "description": f"Claimed total ({claimed_total}) doesn't match sum of breakdown ({actual_sum})"
+                        })
+    
+    return conflicts
+
+def detect_unit_mixing_conflicts(slides):
+    """Detect when same metrics are presented in different time units"""
+    conflicts = []
+    layout_optimization_values = []
+    
+    for slide in slides:
+        text = slide["text"]
+        
+        # Look for Layout Optimization metrics
+        if 'layout optimization' in text.lower():
+            # Check for yearly values
+            yearly_matches = re.findall(r'(\d+)\s*hours?\s*(?:saved\s*)?(?:per\s*consultant[/\s]*year)', text, re.IGNORECASE)
+            for value in yearly_matches:
+                layout_optimization_values.append({
+                    'slide': slide['slide'],
+                    'value': int(value),
+                    'unit': 'per_year',
+                    'normalized_monthly': int(value) / 12
+                })
+            
+            # Check for monthly values
+            monthly_matches = re.findall(r'(\d+)\s*hours?\s*(?:saved\s*)?(?:per\s*consultant\s*monthly)', text, re.IGNORECASE)
+            for value in monthly_matches:
+                layout_optimization_values.append({
+                    'slide': slide['slide'],
+                    'value': int(value),
+                    'unit': 'per_month',
+                    'normalized_monthly': int(value)
+                })
+    
+    # Check if the values are consistent when normalized
+    if len(layout_optimization_values) > 1:
+        normalized_values = [item['normalized_monthly'] for item in layout_optimization_values]
+        if len(set(normalized_values)) > 1:
+            conflicts.append({
+                "type": "unit_mixing_confusion",
+                "severity": "medium",
+                "metric": "Layout Optimization",
+                "description": "Same metric presented in different time units causing potential confusion",
+                "values": layout_optimization_values
+            })
+    
+    return conflicts
+
+# Enhanced numeric conflict detection with context awareness
+def detect_contextual_numeric_conflicts(slides):
+    """Enhanced version that considers context when detecting numeric conflicts"""
+    metric_map = defaultdict(lambda: defaultdict(list))
+    conflicts = []
+
+    # Define metric categories to avoid false positives
+    metric_categories = {
+        'time_savings': ['hours saved', 'minutes saved', 'time saved', 'saves an estimated'],
+        'impact': ['$', 'saved in', 'productivity', 'million'],
+        'efficiency': ['faster', 'speed', 'efficiency'],
+        'comparison': ['vs', 'compared to', 'versus']
+    }
+
+    for slide in slides:
+        text = slide["text"]
+        
+        # More sophisticated pattern matching with context
+        patterns = [
+            r'(?:saves an estimated|delivering|achieving)\s*(\d+(?:\.\d+)?)\s*(hours?|minutes?|mins?)',
+            r'(\$\d+(?:\.\d+)?[MK]?)\s*(?:saved|impact)',
+            r'(\d+(?:\.\d+)?x)\s*(?:faster|speed)',
+            r'(\d+(?:\.\d+)?)\s*(hours?|minutes?)\s*(?:from|saved)',
+        ]
+        
+        for pattern in patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                value = match.group(1)
+                context = text[max(0, match.start()-50):match.end()+50].strip()
+                
+                # Categorize the metric based on context
+                category = categorize_metric(context)
+                if category:
+                    metric_key = f"{category}:{value}"
+                    metric_map[metric_key][value].append({
+                        'slide': slide['slide'],
+                        'context': context,
+                        'full_match': match.group(0)
+                    })
+
+    # Only report conflicts within same categories
+    for metric_key, values in metric_map.items():
+        if len(values) > 1:
+            category = metric_key.split(':')[0]
+            conflicts.append({
+                "type": "contextual_numeric_conflict",
+                "category": category,
+                "metric": metric_key,
+                "values": dict(values)
+            })
+    
+    return conflicts
+
+def categorize_metric(context):
+    """Categorize a metric based on its context"""
+    context_lower = context.lower()
+    
+    if any(word in context_lower for word in ['hours saved', 'minutes saved', 'time saved']):
+        return 'time_savings'
+    elif any(word in context_lower for word in ['$', 'productivity', 'impact']):
+        return 'impact'
+    elif any(word in context_lower for word in ['faster', 'speed', 'efficiency']):
+        return 'efficiency'
+    else:
+        return 'other'
+
+# 2. Detecting percentage sum issues (keeping original)
 def detect_percent_sum_issues(slides, tolerance=2.0):
     """Checks if percentages in a slide sum to ~100%."""
     issues = []
     for s in slides:
         percents = re.findall(r"[-+]?\d{1,3}(?:\.\d+)?%", s["text"])
-        #Explanation of "(r"[-+]?\d{1,3}(?:\.\d+)?%", s["text"])":
-        # [-+]? matches an optional sign (either + or -)
-        # \d{1,3} matches 1 to 3 digits
-        # (?:\.\d+)? matches an optional decimal point followed by one or more digits
-        # % matches the percentage sign
-        # re.findall() returns a list of all matches of the regex in the text of the slide
         if len(percents) >= 2:
             total = sum(float(p.strip("%")) for p in percents)
-            #Converts each percentage string to a float after stripping the '%' sign and sums them up
             if abs(total - 100.0) > tolerance:
                 issues.append({"type": "percent_total_mismatch", "slide": s["slide"], "found_total": total, "details": percents})
-                #if absolute diff between total and 100.0 is greater than the tolerance, it adds an issue
     return issues
 
-
-# Section 4: Gemini Analysis
+# Section 4: Enhanced Gemini Analysis
 
 def extract_json_from_text(t):
     """Extract the first JSON array substring from text (crude but practical)."""
@@ -160,19 +409,34 @@ def extract_json_from_text(t):
     return None
 
 def call_gemini(slide_objs):
-    """Calls Gemini to detect contradictions and inconsistencies."""
+    """Enhanced Gemini call with better prompts for specific inconsistency types"""
     slide_texts = []
     for s in slide_objs:
         ppt_excerpt = (s.get("pptx_text") or "")[:1200]
         ocr_excerpt = (s.get("ocr_text") or "")[:1200]
         slide_texts.append(f"SLIDE {s['slide']}:\nPPTX: {ppt_excerpt}\nOCR: {ocr_excerpt}")
 
-    prompt = (
-        "Analyze the slides for factual or logical inconsistencies by comparing PPTX text and OCR text. "
-        "Return a JSON array where each element has: issue_type, slides (list), excerpt, explanation. "
-        "issue_type ∈ {numeric_conflict, contradictory_claim, timeline_mismatch, other}. "
-        "If no issues, return [].\n\nSlides:\n" + "\n\n".join(slide_texts)
-    )
+    prompt = f"""
+    Analyze these presentation slides for factual and logical inconsistencies. Focus on:
+
+    1. MONETARY VALUES: Look for conflicting dollar, or other revenue currency amounts (e.g., "$2M saved" vs "$3M saved")
+    2. TIME SAVINGS: Check for inconsistent time values (e.g., "15 mins per slide" vs "20 mins per slide")  
+    3. MATHEMATICAL ERRORS: Verify if breakdown components sum to claimed totals
+    4. CONTRADICTORY CLAIMS: Find opposing statements about the same topic
+    5. TIMELINE CONFLICTS: Identify date or sequence inconsistencies
+
+    Return a JSON array where each element has:
+    - issue_type: one of [monetary_conflict, time_savings_conflict, math_error, contradictory_claim, timeline_mismatch, other]
+    - severity: [high, medium, low]
+    - slides: list of slide numbers involved
+    - description: clear explanation of the inconsistency
+    - evidence: specific text excerpts that conflict
+
+    If no issues found, return [].
+
+    Slides:
+    {chr(10).join(slide_texts)}
+    """
 
     try:
         resp = model.generate_content(prompt)
@@ -182,7 +446,6 @@ def call_gemini(slide_objs):
 
     json_blob = extract_json_from_text(text)
     if not json_blob:
-        # fallback: try parsing whole text
         try:
             return json.loads(text)
         except Exception:
@@ -191,7 +454,6 @@ def call_gemini(slide_objs):
         return json.loads(json_blob)
     except Exception as e:
         return [{"type": "parsing_error", "error": str(e), "raw": json_blob}]
-
 
 def get_default_paths():
     base_dir = Path(__file__).resolve().parent  # script is in NOOGATASSIGNMENT/
@@ -206,10 +468,10 @@ def get_default_paths():
 def main():
     default_pptx, default_images = get_default_paths()
 
-    print("\n--- NOOGATASSIGNMENT Default Path Detection ---")
+    print("\n--- ENHANCED NOOGATASSIGNMENT Inconsistency Detector ---")
     print(f"Default PPTX:   {default_pptx if default_pptx else 'Not found'}")
     print(f"Default Images: {default_images if os.path.isdir(default_images) else 'Not found'}")
-    print("------------------------------------------------")
+    print("------------------------------------------------------")
 
     pptx_path = input(f"Enter PPTX path [{default_pptx}]: ").strip() or default_pptx
     images_path = input(f"Enter images folder [{default_images}]: ").strip() or default_images
@@ -226,14 +488,14 @@ def main():
     print(f"Images: {images_path}")
 
     # Start processing: extract text from PPTX and images
-    print("\n[1/5] Extracting text from PPTX slides...")
+    print("\n[1/6] Extracting text from PPTX slides...")
     raw_pptx_slides = extract_text_from_pptx(pptx_path)
 
-    print("[2/5] Running OCR on slide images...")
+    print("[2/6] Running OCR on slide images...")
     raw_image_slides = extract_text_from_images(images_path)
 
     # Normalize both sources
-    print("[3/5] Normalizing slides (extracting numbers/dates)...")
+    print("[3/6] Normalizing slides (extracting numbers/dates)...")
     pptx_norm = [normalize_slides(s) for s in tqdm(raw_pptx_slides, desc="Normalizing PPTX")]
     ocr_norm = [normalize_slides(s) for s in tqdm(raw_image_slides, desc="Normalizing OCR")]
 
@@ -255,26 +517,30 @@ def main():
             "ocr_text": ocr["text"]
         })
 
-    # Run rule-based checks
-    print("[4/5] Running rule-based detectors...")
+    # Run enhanced rule-based checks
+    print("[4/6] Running enhanced rule-based detectors...")
     rule_issues = []
-    rule_issues.extend(detect_numeric_conflicts(combined_slides))
+    
+    # Original detectors
     rule_issues.extend(detect_percent_sum_issues(combined_slides))
+    
+    # Enhanced detectors
+    rule_issues.extend(detect_impact_value_conflicts(combined_slides))
+    rule_issues.extend(detect_time_savings_conflicts(combined_slides))
+    rule_issues.extend(detect_sum_breakdown_conflicts(combined_slides))
+    rule_issues.extend(detect_unit_mixing_conflicts(combined_slides))
+    rule_issues.extend(detect_contextual_numeric_conflicts(combined_slides))
 
     # LLM-based deep checks (if API key available)
     llm_issues = []
     api_key_present = os.environ.get("my_api_key") is not None
     mode = "deep"
-    try:
-        mode = "deep"  # default deep mode in this CLI
-    except:
-        pass
 
     if mode == "deep":
         if not api_key_present:
             print("⚠️  No Gemini API key found in environment variable 'my_api_key'. Skipping deep LLM checks.")
         else:
-            print("[5/5] Running Gemini deep checks (batched)...")
+            print("[5/6] Running enhanced Gemini deep checks (batched)...")
             batch_size = 8
             for i in range(0, len(combined_slides), batch_size):
                 batch = combined_slides[i:i+batch_size]
@@ -284,12 +550,23 @@ def main():
                 else:
                     llm_issues.append({"type":"llm_unexpected", "raw": str(res)})
 
-    # Aggregate and save output
+    # Aggregate and save output with enhanced summary
+    print("[6/6] Generating enhanced report...")
+    
+    # Categorize issues by severity
+    high_priority = [issue for issue in rule_issues if issue.get('severity') == 'high']
+    medium_priority = [issue for issue in rule_issues if issue.get('severity') == 'medium']
+    low_priority = [issue for issue in rule_issues if issue.get('severity') not in ['high', 'medium']]
+
     out = {
         "summary": {
             "slides_processed": len(combined_slides),
+            "total_issues": len(rule_issues) + len(llm_issues),
             "rule_issues": len(rule_issues),
-            "llm_issues": len(llm_issues)
+            "llm_issues": len(llm_issues),
+            "high_priority_issues": len(high_priority),
+            "medium_priority_issues": len(medium_priority),
+            "low_priority_issues": len(low_priority)
         },
         "rule_issues": rule_issues,
         "llm_issues": llm_issues,
@@ -298,16 +575,60 @@ def main():
             for s in combined_slides
         ]
     }
-
-    out_path = Path(__file__).resolve().parent / "inconsistencies.json"
+    
+    out_path = Path(__file__).resolve().parent / "inconsistencies_enhanced_again.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
-    print("\n=== Analysis Complete ===")
+    print("\n=== Enhanced Analysis Complete ===")
     print(f"Slides processed: {out['summary']['slides_processed']}")
-    print(f"Rule-based issues found: {out['summary']['rule_issues']}")
-    print(f"LLM issues found: {out['summary']['llm_issues']}")
-    print(f"Saved report to: {out_path}")
+    print(f"Total issues found: {out['summary']['total_issues']}")
+    print(f"  - High priority: {out['summary']['high_priority_issues']}")
+    print(f"  - Medium priority: {out['summary']['medium_priority_issues']}")  
+    print(f"  - Low priority: {out['summary']['low_priority_issues']}")
+    print(f"Rule-based issues: {out['summary']['rule_issues']}")
+    print(f"LLM issues: {out['summary']['llm_issues']}")
+    print(f"Saved enhanced report to: {out_path}")
+
+    # Print summary of key findings with enhanced details
+    if high_priority:
+        print("\n🚨 HIGH PRIORITY ISSUES DETECTED:")
+        for issue in high_priority:
+            issue_type = issue.get('type', 'Unknown').replace('_', ' ').title()
+            description = issue.get('description', 'No description')
+            slide_num = issue.get('slide', 'Unknown')
+            print(f"  - {issue_type} (Slide {slide_num}): {description}")
+    
+    if medium_priority:
+        print("\n⚠️  MEDIUM PRIORITY ISSUES:")
+        for issue in medium_priority:
+            issue_type = issue.get('type', 'Unknown').replace('_', ' ').title()
+            description = issue.get('description', 'No description')
+            slides_involved = issue.get('slides', [issue.get('slide', 'Unknown')])
+            if isinstance(slides_involved, list):
+                slide_info = f"Slides {', '.join(map(str, slides_involved))}"
+            else:
+                slide_info = f"Slide {slides_involved}"
+            print(f"  - {issue_type} ({slide_info}): {description}")
+    
+    if llm_issues and any(issue.get('issue_type') != 'llm_error' for issue in llm_issues):
+        print("\n🔍 AI-DETECTED ISSUES:")
+        for issue in llm_issues:
+            if issue.get('issue_type') == 'llm_error':
+                continue  # Skip error messages
+            issue_type = issue.get('issue_type', 'Unknown').replace('_', ' ').title()
+            description = issue.get('description', 'No description')
+            slides_involved = issue.get('slides', [])
+            if slides_involved:
+                slide_info = f"Slides {', '.join(map(str, slides_involved))}"
+                print(f"  - {issue_type} ({slide_info}): {description}")
+            else:
+                print(f"  - {issue_type}: {description}")
+    
+    if not rule_issues and not llm_issues:
+        print("\n✅ NO INCONSISTENCIES DETECTED - All slides appear consistent!")
+    
+    print(f"\nDetailed report saved to: {out_path}")
 
 if __name__ == "__main__":
     main()
