@@ -576,7 +576,7 @@ def main():
         ]
     }
     
-    out_path = Path(__file__).resolve().parent / "inconsistencies_enhanced_again.json"
+    out_path = Path(__file__).resolve().parent / "inconsistencies_enhanced.json"
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(out, f, indent=2, ensure_ascii=False)
 
