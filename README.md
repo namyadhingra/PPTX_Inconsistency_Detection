@@ -1,4 +1,4 @@
-# AI-Powered PowerPoint Inconsistency Detector v4.0
+# AI-Powered PowerPoint Inconsistency Detector
 
 AI-Powered PowerPoint Inconsistency Detector is a Python tool that scans multi-slide PowerPoint decks to detect factual, numerical, and logical inconsistencies. It combines rule-based checks for quick wins with Gemini AI for deep, context-aware analysis, making review faster, more accurate, and scalable for presentations of any size.
 
