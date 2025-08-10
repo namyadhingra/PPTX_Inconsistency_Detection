@@ -12,6 +12,14 @@ Modern presentations often contain complex data, metrics, and claims that span m
 - **Mathematical errors** (breakdown components not summing to totals)
 - **Unit inconsistencies** (mixing time units, currency formats)
 
+## 📄 Project Report
+
+The comprehensive project report documenting the development process, technical approach, and evaluation results is available at:
+
+```PPTX_Inconsistency_Detection/docs/```
+
+The report includes detailed analysis of the tool's evolution to an enterprise-ready solution, performance metrics, and evaluation criteria alignment.
+
 ## Key Features
 
 ### 🔍 **Dual Analysis Approach**
