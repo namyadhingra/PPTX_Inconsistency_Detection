@@ -1,0 +1,141 @@
+--- ENHANCED SCALABLE PowerPoint Inconsistency Detector  ---
+Default PPTX:   PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment.pptx
+Default Images: PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment
+----------------------------------------------------------------
+Enter PPTX path [PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment.pptx]:
+Enter images folder [PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment]: 
+
+✅ Paths confirmed:
+PPTX:   PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment.pptx
+Images: PPTX_Inconsistency_Detection\NoogatAssignment\NoogatAssignment
+
+✅ Processing 7 slides...
+OCR workers: 4
+Chunked processing: No
+
+[1/6] Extracting text from PPTX slides...
+[2/6] Running parallel OCR on slide images...
+OCR images: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:02<00:00,  3.42it/s]
+[3/6] Normalizing slides (extracting numbers/dates)...
+Normalizing PPTX: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:07<00:00,  1.03s/it] 
+Normalizing OCR: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 7/7 [00:06<00:00,  1.05it/s] 
+[4/6] Running enhanced rule-based detectors...
+[5/6] Running enhanced Gemini deep checks (batched)...
+[6/6] Generating enhanced report...
+
+=== Enhanced Analysis Complete ===
+Slides processed: 7
+Total issues found: 12
+  - High priority: 2
+  - Medium priority: 1
+  - Low priority: 0
+Rule-based issues: 3
+LLM issues: 9
+Report saved to: PPTX_Inconsistency_Detection\inconsistencies_enhanced.json
+
+🚨 HIGH PRIORITY ISSUES DETECTED:
+  - Impact Value Conflict (Slides 1, 2, 7): Found conflicting impact values: [2000000.0, 3000000.0]
+    → Evidence: [2000000.0, 3000000.0]
+  - Sum Breakdown Mismatch (Slide 3): Claimed total (50) doesn't match sum of breakdown (80)
+    → Claimed Total: 50
+    → Actual Sum: 80
+    → Breakdown: [10, 12, 8, 6, 4, 10, 12, 8, 6, 4]
+
+⚠️  MEDIUM PRIORITY ISSUES:
+  - Unit Mixing Confusion (Slides 3): Same metric presented in different time units causing potential confusion
+    → Mixed Units Found:
+      • Slide 3: 50 per_month
+      • Slide 3: 10 per_month
+      • Slide 3: 12 per_month
+      • Slide 3: 8 per_month
+      • Slide 3: 6 per_month
+      • Slide 3: 4 per_month
+      • Slide 3: 10 per_month
+      • Slide 3: 12 per_month
+      • Slide 3: 8 per_month
+      • Slide 3: 6 per_month
+      • Slide 3: 4 per_month
+
+🔍 AI-DETECTED ISSUES:
+  1. Major Monetary Conflict:
+     The claimed 'Impact' or 'saved productivity hours annually' for Noogat
+     changes significantly between Slide 1 and Slide 2. Slide 1 states '$2M'
+     impact, while Slide 2 claims '$3M saved in lost productivity hours
+     annually'. This represents a 50% difference ($1M difference on a $2M base),
+     which is a major monetary conflict.
+
+  2. Significant Time Savings Conflict:
+     The claimed time saved per slide created by Noogat varies between Slide 1
+     and Slide 2. Slide 1 states '15 mins Saved per slide created', whereas
+     Slide 2 claims '20 mins saved per slide created'. This is a 33% difference
+     (5 minutes difference on a 15-minute base), indicating a significant time
+     savings inconsistency.
+
+  3. Direct Contradiction:
+     The claimed speed improvement for deck creation using Noogat directly
+     contradicts itself. Slide 1 states 'decks 2x faster using AI', while Slide
+     2 claims '3x faster deck creation speed'. This is a clear and direct
+     contradiction regarding a core benefit.
+
+  4. Mathematical Errors In Totals And Direct Contradictions:
+     The total monthly time savings attributed to Noogat varies significantly
+     across multiple slides, and the headline on Slide 3 does not match the sum
+     of its own details or the details on other slides.  - Slide 3 Headline: '50
+     Hours Saved Per Consultant Monthly'. - Slide 3 & 4 detailed breakdown (10 +
+     12 + 8 hours): Sums to 30 hours. - Slide 5 detailed breakdown (10 + 12 + 8
+     + 6 + 4 hours): Sums to 40 hours. This presents multiple mathematical
+     errors and contradictions for a key performance metric (50 hours vs 30
+     hours vs 40 hours).
+
+  5. Direct Contradiction Regarding Competitive Positioning:
+     Slide 6 explicitly states 'Key Limitations of Copilot Compared to Gamma's
+     Superior Slide Capabilities', implying Gamma is superior to Copilot.
+     However, the quantitative time savings data presented in both Slide 4 and
+     Slide 5 consistently shows Copilot achieving significantly higher monthly
+     time savings than Gamma across all categories and in total (e.g., Slide 5
+     shows Copilot at 10.5 hours vs Gamma at 5.7 hours). This directly
+     contradicts the qualitative claim of Gamma's superiority.
+
+  6. Significant Time Savings Conflict:
+     The individual time savings (12 + 8 + 6 + 4 = 30 hours saved per
+     consultant/month) are not explicitly reconciled with the 'Overall
+     Productivity Gains' metric of '15 minutes saved per slide created'. Without
+     stating the average number of slides a consultant creates per month, it's
+     impossible for the audience to verify how the specific component savings
+     translate into the overall per-slide saving.
+
+  7. Direct Contradiction / Ambiguity:
+     The 'Overall Productivity Gains' row presents a 'Current Status' that is a
+     per-unit time saving ('Achieving 15 minutes saved per slide created') while
+     its 'Key Objective' includes both a qualitative benefit ('Enable focus on
+     high-value tasks') and a major monetary target ('save $2M in lost
+     productivity'). This mixes different types of metrics and objectives,
+     leading to significant ambiguity about what this overall category is truly
+     measuring or aiming to achieve.
+
+  8. Major Monetary Conflict / Unsubstantiated Claim:
+     The high-impact claim to 'save $2M in lost productivity' is presented
+     without any supporting data or context. Critical information such as the
+     number of consultants impacted, their average cost, or the timeframe over
+     which this $2M saving occurs (e.g., annually, one-time) is missing, making
+     the monetary claim unverifiable and potentially misleading.
+
+  9. Mathematical Inconsistency / Unstated Assumption:
+     To make the summed individual time savings (30 hours per consultant/month)
+     consistent with the 'Overall Productivity Gains' of 15 minutes saved per
+     slide, a critical implicit assumption is required: each consultant must
+     produce exactly 120 slides per month (30 hours * 60 minutes/hour / 15
+     minutes/slide). This crucial, unstated assumption means the presented
+     figures are conditionally consistent, not explicitly so, creating a gap in
+     the data's integrity.
+
+
+📊 ANALYSIS SUMMARY:
+   • Total Issues Found: 12
+   • Critical Issues: 2 (require immediate attention)
+   • Warning Issues: 1 (should be reviewed)
+   • Rule-based Detection: 3 issues
+   • AI Analysis: 9 issues
+
+📄 Detailed report saved to: PPTX_Inconsistency_Detection\inconsistencies_enhanced.json
+   This JSON file contains complete analysis data and evidence for all detected issues.
