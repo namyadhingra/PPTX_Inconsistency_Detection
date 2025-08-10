@@ -22,16 +22,16 @@ The report includes detailed analysis of the tool's evolution to an enterprise-r
 
 ## Key Features
 
-### 🔍 **Dual Analysis Approach**
+### - **Dual Analysis Approach**
 - **Rule-based detection**: Fast, reliable pattern matching for common inconsistency types
 - **AI-powered analysis**: Deep contextual understanding using Gemini 2.5 Flash API
 
-### 📊 **Multi-source Text Extraction**
+### - **Multi-source Text Extraction**
 - **Primary**: Direct text extraction from PPTX files using python-pptx
 - **Fallback**: OCR processing of slide images using Tesseract
 - **Hybrid**: Combines both sources for maximum accuracy
 
-### 🚀 **Enterprise-Grade Scalability**
+### - **Enterprise-Grade Scalability**
 The tool automatically detects presentation size and adapts its processing strategy:
 
 #### For Large Presentations (50+ slides):
@@ -48,7 +48,7 @@ The tool automatically detects presentation size and adapts its processing strat
 
 *Note: Features like OCR caching and API rate limiting add complexity that's unnecessary for small-scale presentations but become critical for enterprise-level document processing.*
 
-### 🎯 **Specialized Detectors**
+### - **Specialized Detectors**
 - **Impact Value Conflicts**: Detects conflicting monetary amounts ($2M vs $3M) with currency normalization
 - **Time Savings Analysis**: Identifies inconsistent time metrics with unit normalization (minutes ↔ hours)
 - **Mathematical Validation**: Verifies that breakdown components sum to claimed totals
@@ -56,7 +56,7 @@ The tool automatically detects presentation size and adapts its processing strat
 - **Contextual Numeric Analysis**: Context-aware detection of conflicting values within categories
 - **Percentage Sum Validation**: Ensures percentages sum to approximately 100% (±2% tolerance)
 
-### 📈 **Enhanced Reporting **
+### - **Enhanced Reporting**
 - **Detailed Issue Breakdown**: Each issue shows specific evidence, claimed vs actual values, and breakdown details
 - **Numbered AI Issues**: LLM-detected issues are numbered and formatted with proper text wrapping
 - **Evidence Display**: Shows specific conflicting values and their locations
@@ -224,25 +224,25 @@ Input Sources → Text Extraction → Normalization → Analysis → Enhanced Re
 
 ## Evaluation Criteria Alignment
 
-### ✅ **Accuracy & Completeness**
+###  **Accuracy & Completeness**
 - Enhanced rule-based detectors with 6 specialized detection functions
 - Context-aware AI analysis with structured prompts
 - Multi-source text extraction with OCR fallback
 - Currency and time unit normalization for accurate comparisons
 
-### ✅ **Clarity & Usability**
+###  **Clarity & Usability**
 - v3.0 style descriptive terminal output with numbered issues
 - Detailed evidence display with specific slide references
 - Text-wrapped descriptions with professional formatting
 - Clear priority classification and actionable summaries
 
-### ✅ **Scalability & Robustness**
+###  **Scalability & Robustness**
 - Automatic scaling with 50-slide threshold detection
 - Production-ready API rate limiting with retry logic
 - Memory-efficient chunked processing for enterprise use
 - Parallel OCR with configurable worker pools
 
-### ✅ **Thoughtful Design**
+###  **Thoughtful Design**
 - Adaptive resource allocation based on presentation size
 - Enhanced detection functions with proper slide tracking
 - Professional output formatting matching v3.0 style
